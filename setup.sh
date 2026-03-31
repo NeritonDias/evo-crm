@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Evo AI Community — Interactive Setup Script
+# Evo CRM Community — Interactive Setup Script
 # =============================================================================
-# This script sets up the entire Evo AI platform from scratch.
+# This script sets up the entire Evo CRM platform from scratch.
 # It checks prerequisites, builds Docker images, seeds the database,
 # and starts all services.
 #
@@ -53,7 +53,7 @@ spinner() {
 echo ""
 echo "${GREEN}${BOLD}"
 echo "  ╔═══════════════════════════════════════════╗"
-echo "  ║         Evo AI Community Setup            ║"
+echo "  ║         Evo CRM Community Setup            ║"
 echo "  ║   Open-Source AI-Powered CRM Platform     ║"
 echo "  ╚═══════════════════════════════════════════╝"
 echo "${RESET}"
@@ -223,7 +223,7 @@ sleep 10
 echo ""
 echo "${GREEN}${BOLD}"
 echo "  ╔═══════════════════════════════════════════════════════╗"
-echo "  ║           Evo AI Community is running!                ║"
+echo "  ║           Evo CRM Community is running!                ║"
 echo "  ╚═══════════════════════════════════════════════════════╝"
 echo "${RESET}"
 echo ""

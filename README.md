@@ -1,10 +1,31 @@
-# EVO AI Community
+<p align="center">
+  <a href="https://evolutionfoundation.com.br">
+    <img src="./public/hover-evolution.png" alt="Evolution" />
+  </a>
+</p>
 
-> Open-source, single-tenant AI-powered customer support platform.
+<h1 align="center">EVO CRM Community</h1>
 
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+<p align="center">
+  Open-source, single-tenant AI-powered customer support platform.
+</p>
 
-EVO AI Community is the open-source edition of the EVO AI platform — a complete suite for AI-assisted customer support. It brings together authentication, CRM, AI agents, agent processing and a modern frontend into a unified, self-hostable stack.
+<p align="center">
+  <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License: Apache 2.0" /></a>
+  <a href="https://docs.evolutionfoundation.com.br"><img src="https://img.shields.io/badge/Docs-evolutionfoundation.com.br-00ffa7" alt="Documentation" /></a>
+  <a href="https://evolutionfoundation.com.br/community"><img src="https://img.shields.io/badge/Community-Join%20us-white" alt="Community" /></a>
+</p>
+
+<p align="center">
+  <a href="https://evolutionfoundation.com.br">Website</a> &middot;
+  <a href="https://docs.evolutionfoundation.com.br">Documentation</a> &middot;
+  <a href="https://evolutionfoundation.com.br/community">Community</a> &middot;
+  <a href="https://evolutionfoundation.com.br/contribute">Support the project</a>
+</p>
+
+---
+
+EVO CRM Community is the open-source edition of the EVO CRM platform — a complete suite for AI-assisted customer support. It brings together authentication, CRM, AI agents, agent processing and a modern frontend into a unified, self-hostable stack.
 
 This repository is the **monorepo entrypoint**: it aggregates all community services as Git submodules, giving you a single place to clone, update and orchestrate the entire platform.
 
@@ -62,13 +83,15 @@ git submodule update --remote --merge
 
 Refer to each service's own README for environment configuration, setup and seed instructions:
 
-- [evo-auth-service-community →](https://github.com/EvolutionAPI/evo-auth-service-community#readme)
-- [evo-ai-crm-community →](https://github.com/EvolutionAPI/evo-ai-crm-community#readme)
-- [evo-ai-frontend-community →](https://github.com/EvolutionAPI/evo-ai-frontend-community#readme)
-- [evo-ai-processor-community →](https://github.com/EvolutionAPI/evo-ai-processor-community#readme)
-- [evo-ai-core-service-community →](https://github.com/EvolutionAPI/evo-ai-core-service-community#readme)
+- [evo-auth-service-community](https://github.com/EvolutionAPI/evo-auth-service-community#readme)
+- [evo-ai-crm-community](https://github.com/EvolutionAPI/evo-ai-crm-community#readme)
+- [evo-ai-frontend-community](https://github.com/EvolutionAPI/evo-ai-frontend-community#readme)
+- [evo-ai-processor-community](https://github.com/EvolutionAPI/evo-ai-processor-community#readme)
+- [evo-ai-core-service-community](https://github.com/EvolutionAPI/evo-ai-core-service-community#readme)
 
 > **Note:** `evo-auth-service-community` must be seeded before `evo-ai-crm-community` — the CRM depends on the user created by the auth seed.
+
+For detailed setup instructions, visit the [full documentation](https://docs.evolutionfoundation.com.br).
 
 ---
 
@@ -100,8 +123,14 @@ All inter-service communication uses Bearer token authentication. The token issu
 
 ## Contributing
 
-Contributions are welcome. Please open an issue or pull request in the relevant submodule repository.
+Contributions are welcome! Please open an issue or pull request in the relevant submodule repository.
+
+Join the [community](https://evolutionfoundation.com.br/community) to discuss ideas, ask questions and collaborate.
+
+Want to support the project? Visit [evolutionfoundation.com.br/contribute](https://evolutionfoundation.com.br/contribute).
 
 ## License
 
-MIT — [LICENSE](./LICENSE) for details.
+Apache 2.0 — see [LICENSE](./LICENSE) for details.
+
+Made with love by [Evolution Foundation](https://evolutionfoundation.com.br).
