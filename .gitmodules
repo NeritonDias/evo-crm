@@ -18,4 +18,4 @@
 	url = git@github.com:EvolutionAPI/evolution-api.git
 [submodule "evolution-go"]
 	path = evolution-go
-	url = git@github.com:EvolutionAPI/evolution-go-develop.git
+	url = git@github.com:EvolutionAPI/evolution-go.git
