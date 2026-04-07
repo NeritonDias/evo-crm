@@ -107,6 +107,9 @@ services:
       POSTGRES_HOST: postgres
       EVO_AUTH_SERVICE_URL: http://evo-auth:3001
       EVO_AI_CORE_SERVICE_URL: http://evo-core:5555
+      BOT_RUNTIME_URL: http://evo-bot-runtime:8080
+      BOT_RUNTIME_SECRET: ${BOT_RUNTIME_SECRET:-evo-bot-runtime-dev-secret}
+      BOT_RUNTIME_POSTBACK_BASE_URL: http://evo-crm:3000
     volumes:
       - ./evo-ai-crm-community:/app:delegated
       - crm_bundle:/usr/local/bundle
@@ -144,6 +147,9 @@ services:
       POSTGRES_HOST: postgres
       EVO_AUTH_SERVICE_URL: http://evo-auth:3001
       EVO_AI_CORE_SERVICE_URL: http://evo-core:5555
+      BOT_RUNTIME_URL: http://evo-bot-runtime:8080
+      BOT_RUNTIME_SECRET: ${BOT_RUNTIME_SECRET:-evo-bot-runtime-dev-secret}
+      BOT_RUNTIME_POSTBACK_BASE_URL: http://evo-crm:3000
     volumes:
       - ./evo-ai-crm-community:/app:delegated
       - crm_bundle:/usr/local/bundle

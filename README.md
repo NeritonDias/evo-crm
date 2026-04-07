@@ -33,7 +33,7 @@ This repository is the **monorepo entrypoint**: it aggregates all community serv
 
 ## Architecture
 
-The platform is composed of 5 independent services:
+The platform is composed of 6 independent services:
 
 | Service                                                            | Role                                         | Stack                     | Default Port |
 | ------------------------------------------------------------------ | -------------------------------------------- | ------------------------- | ------------ |
@@ -42,6 +42,7 @@ The platform is composed of 5 independent services:
 | [`evo-ai-frontend-community`](./evo-ai-frontend-community)         | Web interface                                | React / TypeScript / Vite | `5173`       |
 | [`evo-ai-processor-community`](./evo-ai-processor-community)       | AI agent execution, sessions, tools, MCP     | Python 3.10 / FastAPI     | `8000`       |
 | [`evo-ai-core-service-community`](./evo-ai-core-service-community) | Agent management, API keys, folders          | Go / Gin                  | `5555`       |
+| [`evo-bot-runtime`](./evo-bot-runtime)                              | Bot pipeline execution, debouncing, dispatch | Go / Gin                  | `8080`       |
 
 ### Design principles (Community Edition)
 
@@ -88,6 +89,7 @@ Refer to each service's own README for environment configuration, setup and seed
 - [evo-ai-frontend-community](https://github.com/EvolutionAPI/evo-ai-frontend-community#readme)
 - [evo-ai-processor-community](https://github.com/EvolutionAPI/evo-ai-processor-community#readme)
 - [evo-ai-core-service-community](https://github.com/EvolutionAPI/evo-ai-core-service-community#readme)
+- [evo-bot-runtime](https://github.com/EvolutionAPI/evo-bot-runtime#readme)
 
 > **Note:** `evo-auth-service-community` must be seeded before `evo-ai-crm-community` — the CRM depends on the user created by the auth seed.
 
@@ -103,6 +105,7 @@ evo-ai-frontend-community
     └── evo-ai-crm-community        (conversations, contacts)
     └── evo-ai-core-service-community (agents, tools, API keys)
     └── evo-ai-processor-community  (agent execution, sessions)
+        └── evo-bot-runtime         (bot pipeline execution)
 ```
 
 All inter-service communication uses Bearer token authentication. The token issued by `evo-auth-service-community` is forwarded between services — no additional headers required.
@@ -118,6 +121,7 @@ All inter-service communication uses Bearer token authentication. The token issu
 | `evo-ai-frontend-community`     | [EvolutionAPI/evo-ai-frontend-community](https://github.com/EvolutionAPI/evo-ai-frontend-community)         |
 | `evo-ai-processor-community`    | [EvolutionAPI/evo-ai-processor-community](https://github.com/EvolutionAPI/evo-ai-processor-community)       |
 | `evo-ai-core-service-community` | [EvolutionAPI/evo-ai-core-service-community](https://github.com/EvolutionAPI/evo-ai-core-service-community) |
+| `evo-bot-runtime`               | [EvolutionAPI/evo-bot-runtime](https://github.com/EvolutionAPI/evo-bot-runtime)                             |
 
 ---
 
