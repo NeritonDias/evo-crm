@@ -85,7 +85,7 @@ services:
       MFA_ISSUER: ${MFA_ISSUER:-EvoCRM}
       SIDEKIQ_CONCURRENCY: ${SIDEKIQ_CONCURRENCY:-10}
       ACTIVE_STORAGE_SERVICE: ${ACTIVE_STORAGE_SERVICE:-local}
-      OAUTH_REDIRECT_URI: https://${FRONTEND_DOMAIN}/oauth/callback
+
     networks:
       - network_public
     stop_grace_period: 300s
