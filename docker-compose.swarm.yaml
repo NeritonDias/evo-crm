@@ -14,53 +14,23 @@ version: "3.8"
 # Only 2 public domains needed:
 #   - FRONTEND_DOMAIN  → evo_frontend  (React app)
 #   - API_DOMAIN       → evo_gateway   (Nginx → all backend services)
+#
+# Required environment variables (set via .env file or export):
+#   - API_DOMAIN, FRONTEND_DOMAIN
+#   - SECRET_KEY_BASE, JWT_SECRET_KEY, DOORKEEPER_JWT_SECRET_KEY
+#   - EVOAI_CRM_API_TOKEN, ENCRYPTION_KEY, BOT_RUNTIME_SECRET
+#   - POSTGRES_HOST, POSTGRES_PORT, POSTGRES_USERNAME, POSTGRES_PASSWORD, POSTGRES_DATABASE
+#   - REDIS_URL (or REDIS_HOST + REDIS_PORT + REDIS_PASSWORD)
+#   - OAUTH_REDIRECT_URI
 # =============================================================================
 
 services:
-
-  # ---------------------------------------------------------------------------
-  # Infrastructure
-  # ---------------------------------------------------------------------------
-  evo_postgres:
-    image: pgvector/pgvector:pg16
-    volumes:
-      - evo_postgres_data:/var/lib/postgresql/data
-    environment:
-      POSTGRES_DB: ${POSTGRES_DATABASE:-evo_community}
-      POSTGRES_USER: ${POSTGRES_USERNAME:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-REPLACE_ME_POSTGRES_PASSWORD}
-    networks:
-      - evo_internal
-    deploy:
-      replicas: 1
-      placement:
-        constraints:
-          - node.hostname == manager1
-      restart_policy:
-        condition: any
-
-  evo_redis:
-    image: redis:alpine
-    command: ["sh", "-c", "redis-server --requirepass ${REDIS_PASSWORD:-REPLACE_ME_REDIS_PASSWORD} --appendonly yes"]
-    volumes:
-      - evo_redis_data:/data
-    networks:
-      - evo_internal
-    deploy:
-      replicas: 1
-      placement:
-        constraints:
-          - node.hostname == manager1
-      restart_policy:
-        condition: any
-
   # ---------------------------------------------------------------------------
   # API Gateway (Nginx) — single entrypoint for all backend services
   # ---------------------------------------------------------------------------
   evo_gateway:
     image: evoapicloud/evo-crm-gateway:latest
     networks:
-      - evo_internal
       - network_public
     deploy:
       replicas: 1
@@ -91,29 +61,34 @@ services:
       SECRET_KEY_BASE: ${SECRET_KEY_BASE}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       EVOAI_CRM_API_TOKEN: ${EVOAI_CRM_API_TOKEN}
-      POSTGRES_HOST: evo_postgres
-      POSTGRES_PORT: "5432"
-      POSTGRES_USERNAME: ${POSTGRES_USERNAME:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-REPLACE_ME_POSTGRES_PASSWORD}
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_USERNAME: ${POSTGRES_USERNAME}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DATABASE: ${POSTGRES_DATABASE:-evo_community}
-      REDIS_URL: redis://:${REDIS_PASSWORD:-REPLACE_ME_REDIS_PASSWORD}@evo_redis:6379/1
+      POSTGRES_SSLMODE: ${POSTGRES_SSLMODE:-require}
+      REDIS_URL: ${REDIS_URL}
       FRONTEND_URL: https://${FRONTEND_DOMAIN}
+      BACKEND_URL: https://${API_DOMAIN}
+      CORS_ORIGINS: https://${FRONTEND_DOMAIN},https://${API_DOMAIN}
       MAILER_SENDER_EMAIL: ${MAILER_SENDER_EMAIL:-noreply@evoai.local}
-      SMTP_ADDRESS: ${SMTP_ADDRESS}
+      SMTP_ADDRESS: ${SMTP_ADDRESS:-}
       SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_DOMAIN: ${SMTP_DOMAIN}
+      SMTP_DOMAIN: ${SMTP_DOMAIN:-}
       SMTP_AUTHENTICATION: ${SMTP_AUTHENTICATION:-plain}
       SMTP_ENABLE_STARTTLS_AUTO: ${SMTP_ENABLE_STARTTLS_AUTO:-true}
-      SMTP_USERNAME: ${SMTP_USERNAME}
-      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       DOORKEEPER_JWT_SECRET_KEY: ${DOORKEEPER_JWT_SECRET_KEY}
       DOORKEEPER_JWT_ALGORITHM: hs256
       DOORKEEPER_JWT_ISS: evo-auth-service
-      MFA_ISSUER: EvoAI
-      SIDEKIQ_CONCURRENCY: 10
-      ACTIVE_STORAGE_SERVICE: local
+      MFA_ISSUER: ${MFA_ISSUER:-EvoCRM}
+      SIDEKIQ_CONCURRENCY: ${SIDEKIQ_CONCURRENCY:-10}
+      ACTIVE_STORAGE_SERVICE: ${ACTIVE_STORAGE_SERVICE:-local}
+      OAUTH_REDIRECT_URI: https://${FRONTEND_DOMAIN}/oauth/callback
     networks:
-      - evo_internal
+      - network_public
+    stop_grace_period: 300s
     deploy:
       replicas: 1
       placement:
@@ -130,28 +105,29 @@ services:
       SECRET_KEY_BASE: ${SECRET_KEY_BASE}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       EVOAI_CRM_API_TOKEN: ${EVOAI_CRM_API_TOKEN}
-      POSTGRES_HOST: evo_postgres
-      POSTGRES_PORT: "5432"
-      POSTGRES_USERNAME: ${POSTGRES_USERNAME:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-REPLACE_ME_POSTGRES_PASSWORD}
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_USERNAME: ${POSTGRES_USERNAME}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DATABASE: ${POSTGRES_DATABASE:-evo_community}
-      REDIS_URL: redis://:${REDIS_PASSWORD:-REPLACE_ME_REDIS_PASSWORD}@evo_redis:6379/1
-      FRONTEND_URL: https://${FRONTEND_DOMAIN}
+      POSTGRES_SSLMODE: ${POSTGRES_SSLMODE:-require}
+      REDIS_URL: ${REDIS_URL}
+      CORS_ORIGINS: https://${FRONTEND_DOMAIN},https://${API_DOMAIN}
+      SMTP_ADDRESS: ${SMTP_ADDRESS:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_DOMAIN: ${SMTP_DOMAIN:-}
+      SMTP_AUTHENTICATION: ${SMTP_AUTHENTICATION:-plain}
+      SMTP_ENABLE_STARTTLS_AUTO: ${SMTP_ENABLE_STARTTLS_AUTO:-true}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       DOORKEEPER_JWT_SECRET_KEY: ${DOORKEEPER_JWT_SECRET_KEY}
       DOORKEEPER_JWT_ALGORITHM: hs256
       DOORKEEPER_JWT_ISS: evo-auth-service
-      MFA_ISSUER: EvoAI
-      ACTIVE_STORAGE_SERVICE: local
-      SMTP_ADDRESS: ${SMTP_ADDRESS}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_DOMAIN: ${SMTP_DOMAIN}
-      SMTP_AUTHENTICATION: ${SMTP_AUTHENTICATION:-plain}
-      SMTP_ENABLE_STARTTLS_AUTO: ${SMTP_ENABLE_STARTTLS_AUTO:-true}
-      SMTP_USERNAME: ${SMTP_USERNAME}
-      SMTP_PASSWORD: ${SMTP_PASSWORD}
-      SIDEKIQ_CONCURRENCY: 10
+      MFA_ISSUER: ${MFA_ISSUER:-EvoCRM}
+      SIDEKIQ_CONCURRENCY: ${SIDEKIQ_CONCURRENCY:-10}
+      ACTIVE_STORAGE_SERVICE: ${ACTIVE_STORAGE_SERVICE:-local}
     networks:
-      - evo_internal
+      - network_public
     stop_grace_period: 300s
     deploy:
       replicas: 1
@@ -174,12 +150,13 @@ services:
       SECRET_KEY_BASE: ${SECRET_KEY_BASE}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       EVOAI_CRM_API_TOKEN: ${EVOAI_CRM_API_TOKEN}
-      POSTGRES_HOST: evo_postgres
-      POSTGRES_PORT: "5432"
-      POSTGRES_USERNAME: ${POSTGRES_USERNAME:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-REPLACE_ME_POSTGRES_PASSWORD}
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_USERNAME: ${POSTGRES_USERNAME}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DATABASE: ${POSTGRES_DATABASE:-evo_community}
-      REDIS_URL: redis://:${REDIS_PASSWORD:-REPLACE_ME_REDIS_PASSWORD}@evo_redis:6379/0
+      POSTGRES_SSLMODE: ${POSTGRES_SSLMODE:-require}
+      REDIS_URL: ${REDIS_URL}
       EVO_AUTH_SERVICE_URL: http://evo_auth:3001
       EVO_AI_CORE_SERVICE_URL: http://evo_core:5555
       BACKEND_URL: https://${API_DOMAIN}
@@ -194,7 +171,7 @@ services:
       BOT_RUNTIME_SECRET: ${BOT_RUNTIME_SECRET}
       BOT_RUNTIME_POSTBACK_BASE_URL: http://evo_crm:3000
     networks:
-      - evo_internal
+      - network_public
     deploy:
       replicas: 1
       placement:
@@ -211,19 +188,21 @@ services:
       SECRET_KEY_BASE: ${SECRET_KEY_BASE}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       EVOAI_CRM_API_TOKEN: ${EVOAI_CRM_API_TOKEN}
-      POSTGRES_HOST: evo_postgres
-      POSTGRES_PORT: "5432"
-      POSTGRES_USERNAME: ${POSTGRES_USERNAME:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-REPLACE_ME_POSTGRES_PASSWORD}
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_USERNAME: ${POSTGRES_USERNAME}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DATABASE: ${POSTGRES_DATABASE:-evo_community}
-      REDIS_URL: redis://:${REDIS_PASSWORD:-REPLACE_ME_REDIS_PASSWORD}@evo_redis:6379/0
+      POSTGRES_SSLMODE: ${POSTGRES_SSLMODE:-require}
+      REDIS_URL: ${REDIS_URL}
       EVO_AUTH_SERVICE_URL: http://evo_auth:3001
       EVO_AI_CORE_SERVICE_URL: http://evo_core:5555
+      CORS_ORIGINS: https://${FRONTEND_DOMAIN},https://${API_DOMAIN}
       BOT_RUNTIME_URL: http://evo_bot_runtime:8080
       BOT_RUNTIME_SECRET: ${BOT_RUNTIME_SECRET}
       BOT_RUNTIME_POSTBACK_BASE_URL: http://evo_crm:3000
     networks:
-      - evo_internal
+      - network_public
     deploy:
       replicas: 1
       placement:
@@ -237,14 +216,13 @@ services:
   # ---------------------------------------------------------------------------
   evo_core:
     image: evoapicloud/evo-ai-core-service-community:latest
-    command: sh -c "./migrate -database \"postgres://$${DB_USER}:$${DB_PASSWORD}@$${DB_HOST}:$${DB_PORT}/$${DB_NAME}?sslmode=$${DB_SSLMODE}&x-migrations-table=evo_core_community_schema_migrations\" -path ./migrations up 2>&1 || echo 'Core migration had errors, continuing...'; exec ./main"
     environment:
-      DB_HOST: evo_postgres
-      DB_PORT: "5432"
-      DB_USER: ${POSTGRES_USERNAME:-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-REPLACE_ME_POSTGRES_PASSWORD}
+      DB_HOST: ${POSTGRES_HOST}
+      DB_PORT: ${POSTGRES_PORT:-5432}
+      DB_USER: ${POSTGRES_USERNAME}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_NAME: ${POSTGRES_DATABASE:-evo_community}
-      DB_SSLMODE: disable
+      DB_SSLMODE: ${POSTGRES_SSLMODE:-require}
       DB_MAX_IDLE_CONNS: 10
       DB_MAX_OPEN_CONNS: 100
       DB_CONN_MAX_LIFETIME: 1h
@@ -259,7 +237,7 @@ services:
       AI_PROCESSOR_URL: http://evo_processor:8000
       AI_PROCESSOR_VERSION: v1
     networks:
-      - evo_internal
+      - network_public
     deploy:
       replicas: 1
       placement:
@@ -275,12 +253,12 @@ services:
     image: evoapicloud/evo-ai-processor-community:latest
     command: sh -c "alembic upgrade head 2>&1 || echo 'Alembic migration had errors, continuing...'; python -m scripts.run_seeders; uvicorn src.main:app --host $$HOST --port $$PORT"
     environment:
-      POSTGRES_CONNECTION_STRING: postgresql://${POSTGRES_USERNAME:-postgres}:${POSTGRES_PASSWORD:-REPLACE_ME_POSTGRES_PASSWORD}@evo_postgres:5432/${POSTGRES_DATABASE:-evo_community}
-      REDIS_HOST: evo_redis
-      REDIS_PORT: "6379"
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-REPLACE_ME_REDIS_PASSWORD}
+      POSTGRES_CONNECTION_STRING: ${PROCESSOR_POSTGRES_CONNECTION_STRING}
+      REDIS_HOST: ${PROCESSOR_REDIS_HOST}
+      REDIS_PORT: ${PROCESSOR_REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${PROCESSOR_REDIS_PASSWORD}
       REDIS_SSL: "false"
-      REDIS_DB: 0
+      REDIS_DB: ${PROCESSOR_REDIS_DB:-0}
       REDIS_KEY_PREFIX: "a2a:"
       REDIS_TTL: 3600
       HOST: 0.0.0.0
@@ -296,13 +274,13 @@ services:
       API_DESCRIPTION: Agent Processor Community for Evo AI
       API_VERSION: 1.0.0
       API_URL: https://${API_DOMAIN}
-      ORGANIZATION_NAME: Evo AI
+      ORGANIZATION_NAME: ${ORGANIZATION_NAME:-Evo CRM}
       TOOLS_CACHE_ENABLED: "true"
       TOOLS_CACHE_TTL: 3600
     volumes:
       - evo_processor_logs:/app/logs
     networks:
-      - evo_internal
+      - network_public
     deploy:
       replicas: 1
       placement:
@@ -318,12 +296,12 @@ services:
     image: evoapicloud/evo-bot-runtime:latest
     environment:
       LISTEN_ADDR: 0.0.0.0:8080
-      REDIS_URL: redis://:${REDIS_PASSWORD:-REPLACE_ME_REDIS_PASSWORD}@evo_redis:6379
+      REDIS_URL: ${REDIS_URL}
       AI_PROCESSOR_URL: http://evo_processor:8000
       BOT_RUNTIME_SECRET: ${BOT_RUNTIME_SECRET}
       AI_CALL_TIMEOUT_SECONDS: 30
     networks:
-      - evo_internal
+      - network_public
     deploy:
       replicas: 1
       placement:
@@ -363,16 +341,10 @@ services:
         - traefik.http.services.evo_frontend.loadbalancer.passHostHeader=true
 
 networks:
-  evo_internal:
-    driver: overlay
   network_public:
     external: true
     name: network_public
 
 volumes:
-  evo_postgres_data:
-    external: false
-  evo_redis_data:
-    external: false
   evo_processor_logs:
     external: false
