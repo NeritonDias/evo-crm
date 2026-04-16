@@ -194,42 +194,272 @@ Porem, **NAO e recomendado** porque:
 
 ---
 
-## 5. Recomendacao
+## 5. Analise do evo-nexus: Como Implementa OAuth Codex
 
-### NAO implementar OAuth Codex da OpenAI neste momento.
+### 5.1 Arquitetura do evo-nexus (Fundamental Diferente)
 
-**Razoes:**
+O evo-nexus e um **sistema de agentes baseado em CLI** (Claude Code), NAO um CRM multi-tenant.
+Ele **delega a execucao para CLIs** (`claude` ou `openclaude`) via subprocess, nao faz chamadas
+diretas de API como o evo-crm.
 
-1. **Produto errado** - OAuth Codex e para o produto Codex (agente de codigo), nao para uso generico da API OpenAI. Usar tokens Codex para chamadas de chat/completion e um hack, nao uma integracao suportada.
+| Aspecto | evo-nexus | evo-crm |
+|---|---|---|
+| **Modelo** | CLI wrapper (spawna `claude`/`openclaude`) | Chamadas diretas via LiteLLM SDK |
+| **Multi-tenant** | Single user/workspace | Multi-tenant (client_id por usuario) |
+| **Storage tokens** | Arquivo `~/.codex/auth.json` | PostgreSQL (tabela `api_keys`) |
+| **Token refresh** | Tratado pelo CLI (openclaude) | Teria que ser implementado manualmente |
+| **Stack** | Flask dashboard + React frontend | Rails + Go + FastAPI + React |
+| **Provider config** | JSON file (`providers.json`) | PostgreSQL + Fernet encryption |
 
-2. **Risco de quebra** - OpenAI pode bloquear o uso do client ID publico por terceiros a qualquer momento.
+### 5.2 Implementacao OAuth Codex no evo-nexus
 
-3. **Scopes incompletos** - Tokens atuais nao autorizam chamadas de API necessarias.
+O evo-nexus implementa o fluxo completo em `dashboard/backend/routes/providers.py`.
 
-4. **Custo-beneficio** - A complexidade de implementacao e alta (~60-90 arquivos, 4-6 semanas) para um beneficio questionavel, dado que a autenticacao por API key funciona perfeitamente para todos os providers.
+#### Constantes
 
-### Alternativas Recomendadas
+```python
+OPENAI_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"  # Client ID publico do Codex
+OPENAI_AUTH_URL  = "https://auth.openai.com/oauth/authorize"
+OPENAI_TOKEN_URL = "https://auth.openai.com/oauth/token"
+CODEX_AUTH_FILE  = Path.home() / ".codex" / "auth.json"
+```
 
-**Se o objetivo e melhorar a seguranca das API keys:**
-1. **Key rotation automatico** - Implementar rotacao periodica de API keys
-2. **Key validation** - Validar a API key ao cadastrar (fazer uma chamada de teste)
-3. **Usage tracking** - Monitorar uso por API key
-4. **Key masking** - Mostrar apenas ultimos 4 caracteres na UI (ja parcialmente implementado)
+#### Fluxo 1: Browser OAuth (PKCE)
 
-**Se o objetivo e simplificar a UX de conexao com OpenAI:**
-1. **Aguardar** a OpenAI lancar um OAuth generico para plataforma (ainda nao existe)
-2. **Implementar validacao inline** - ao colar a API key, validar e mostrar os modelos disponiveis automaticamente
+```
+Frontend                    Backend (/api/providers)         OpenAI Auth
+   |                              |                              |
+   |-- POST /openai/auth-start ->|                              |
+   |                              |-- gera code_verifier (PKCE) |
+   |                              |-- gera code_challenge (S256)|
+   |                              |-- gera state token          |
+   |<- {authorize_url} ----------|                              |
+   |                              |                              |
+   |-- abre URL no browser ------>|----------------------------->|
+   |                              |     usuario faz login ChatGPT|
+   |                              |<---- callback com ?code=... -|
+   |   (usuario copia URL)        |                              |
+   |                              |                              |
+   |-- POST /openai/auth-complete |                              |
+   |   {callback_url: "..."}  -->|                              |
+   |                              |-- extrai code da URL        |
+   |                              |-- POST /oauth/token -------->|
+   |                              |   {grant_type, code,         |
+   |                              |    code_verifier, client_id} |
+   |                              |<--- {access_token,           |
+   |                              |      refresh_token,          |
+   |                              |      id_token} --------------|
+   |                              |                              |
+   |                              |-- salva em ~/.codex/auth.json|
+   |                              |-- ativa provider "openai"    |
+   |<- {status: "ok"} -----------|                              |
+```
 
-**Se no futuro a OpenAI lancar OAuth para API Platform:**
-A arquitetura do evo-crm esta bem preparada para isso:
-- O auth service ja tem Doorkeeper + `dynamic_oauth`
-- O modelo de dados pode ser estendido facilmente
-- O LiteLLM pode receber tokens OAuth como `api_key`
-- A adaptacao seria significativamente mais simples
+#### Fluxo 2: Device Code (para ambientes sem browser)
+
+```
+Frontend                    Backend                    OpenAI Auth
+   |                              |                         |
+   |-- POST /openai/device-start->|                         |
+   |                              |-- POST /deviceauth/usercode ->|
+   |                              |<- {device_auth_id,       |
+   |                              |    user_code} -----------|
+   |<- {user_code,                |                         |
+   |    verification_url} --------|                         |
+   |                              |                         |
+   | usuario abre URL e digita codigo                       |
+   |                              |                         |
+   |-- POST /openai/device-poll ->|                         |
+   |                              |-- POST /deviceauth/token ->|
+   |                              |<- authorization_code ----|
+   |                              |-- POST /oauth/token ---->|
+   |                              |<- tokens ---------------|
+   |                              |-- salva auth.json       |
+   |<- {status: "authorized"} ---|                         |
+```
+
+#### Scopes Usados
+
+```python
+"scope": "openid profile email offline_access api.connectors.read api.connectors.invoke"
+```
+
+**Nota:** O evo-nexus inclui `api.connectors.read` e `api.connectors.invoke` que NAO estavam
+na documentacao oficial do Codex CLI. Isso pode ajudar com permissoes adicionais.
+
+#### Storage dos Tokens
+
+```python
+def _save_codex_auth(tokens: dict):
+    auth_data = {
+        "auth_mode": "Chatgpt",
+        "tokens": {
+            "access_token": tokens["access_token"],
+            "refresh_token": tokens.get("refresh_token", ""),
+            "id_token": tokens.get("id_token", access_token),
+            "account_id": "<extraido do JWT payload>",
+        },
+        "last_refresh": "2026-04-16T00:00:00Z",
+    }
+    # Salva em ~/.codex/auth.json
+```
+
+#### Endpoints Implementados
+
+| Endpoint | Metodo | Funcao |
+|---|---|---|
+| `/api/providers/openai/auth-start` | POST | Inicia OAuth PKCE, retorna authorize URL |
+| `/api/providers/openai/auth-complete` | POST | Recebe callback URL, troca code por tokens |
+| `/api/providers/openai/device-start` | POST | Inicia Device Code flow |
+| `/api/providers/openai/device-poll` | POST | Polling ate usuario autorizar |
+| `/api/providers/openai/status` | GET | Verifica se auth.json existe e tem tokens |
+| `/api/providers/openai/logout` | POST | Remove auth.json e reseta provider |
+
+### 5.3 POR QUE Funciona no evo-nexus mas NAO Pode Ser Copiado Diretamente
+
+O evo-nexus **NAO usa os tokens OAuth para fazer chamadas diretas de API**.
+Ele salva os tokens em `~/.codex/auth.json` e o CLI `openclaude` lida com tudo:
+- Token refresh automatico
+- Protocolo de comunicacao com OpenAI
+- Gerenciamento de sessao
+
+**No evo-crm, a situacao e completamente diferente:**
+- O evo-crm faz chamadas diretas via `LiteLLM(model=..., api_key=...)`
+- LiteLLM espera uma API key estatica, nao um OAuth access token
+- Nao ha CLI intermediario para gerenciar o lifecycle dos tokens
+- E multi-tenant: cada usuario/client precisa de seus proprios tokens
+
+### 5.4 O Que PODE Ser Portado do evo-nexus
+
+| Componente | Portabilidade | Adaptacao Necessaria |
+|---|---|---|
+| OAuth PKCE flow | ALTA | Adaptar para Rails/Python ao inves de Flask |
+| Device Code flow | ALTA | Mesma logica, diferente framework |
+| Frontend UI (Providers.tsx) | MEDIA | Adaptar para React existente do evo-crm |
+| Token storage em arquivo | BAIXA | Precisa ser PostgreSQL com criptografia |
+| Token refresh automatico | NAO PORTAVEL | No nexus o CLI faz; no crm precisa implementar |
+| Uso dos tokens para API calls | NAO PORTAVEL | Nexus delega ao CLI; crm faz chamadas diretas |
 
 ---
 
-## 6. Arquivos-Chave Analisados
+## 6. Viabilidade de Implementacao no evo-crm (Baseado no evo-nexus)
+
+### 6.1 Abordagem Proposta (Se Decidir Implementar)
+
+Seria necessario adaptar o fluxo do evo-nexus para a arquitetura do evo-crm:
+
+```
+Frontend (React)
+    |
+    | 1. Botao "Conectar com OpenAI (Codex OAuth)"
+    | 2. Popup OAuth -> auth.openai.com/oauth/authorize (PKCE)
+    | 3. Callback com code
+    |
+    v
+evo-core (Backend)
+    |
+    | 4. Troca code por tokens (POST auth.openai.com/oauth/token)
+    | 5. Criptografa tokens com Fernet
+    | 6. Salva na NOVA tabela oauth_tokens (PostgreSQL)
+    |    {client_id, provider, access_token_enc, refresh_token_enc, expires_at}
+    |
+    v
+Background Job (Sidekiq/Celery)
+    |
+    | 7. A cada 4 minutos, verifica tokens proximos de expirar
+    | 8. Faz refresh automatico (POST auth.openai.com/oauth/token)
+    | 9. Atualiza tokens no banco
+    |
+    v
+AgentBuilder (Runtime)
+    |
+    | 10. Verifica se agente usa OAuth ou API key
+    | 11. Se OAuth: busca access_token descriptografado
+    | 12. Passa como api_key ao LiteLLM
+    |     LiteLlm(model="openai/gpt-4o", api_key=<oauth_access_token>)
+    |
+    v
+OpenAI API (Authorization: Bearer <oauth_access_token>)
+    |
+    | *** RISCO: Token pode nao ter scope model.request ***
+    | *** Resultado: 401 Unauthorized ou funciona parcialmente ***
+```
+
+### 6.2 Estimativa de Complexidade Revisada
+
+Com base no codigo real do evo-nexus como referencia:
+
+| Componente | Complexidade | Arquivos | Referencia no evo-nexus |
+|---|---|---|---|
+| OAuth PKCE endpoints | BAIXA | ~3 | `providers.py` (linhas 200-280) |
+| Device Code endpoints | BAIXA | ~2 | `providers.py` (linhas 285-350) |
+| Token storage model + migration | BAIXA | ~3 | Novo (nexus usa arquivo) |
+| Token encryption service | BAIXA | ~2 | Reusar `crypto.py` existente |
+| Token refresh background job | MEDIA | ~5 | Novo (nexus delega ao CLI) |
+| Adaptar AgentBuilder | MEDIA | ~4 | `agent_builder.py` |
+| Frontend OAuth UI | MEDIA | ~8 | `Providers.tsx` |
+| Frontend Device Code UI | MEDIA | ~5 | `Providers.tsx` |
+| Adaptar ApiKeysDialog | BAIXA | ~2 | Existente no evo-crm |
+| Testes | MEDIA | ~10 | Novos |
+| **TOTAL** | **MEDIA** | **~44 arquivos** | |
+
+**Reducao de ~60-90 para ~44 arquivos** por ter o evo-nexus como referencia de implementacao.
+
+### 6.3 Riscos Persistentes (Mesmo Com Referencia do evo-nexus)
+
+1. **Scope `model.request` ainda e um problema** - O evo-nexus contorna isso usando o CLI que tem tratamento interno. No evo-crm, chamadas diretas podem falhar com 401.
+
+2. **Token refresh rotativo** - Refresh tokens da OpenAI sao single-use. Se o refresh falhar (rede, timing), o usuario perde acesso e precisa re-autenticar.
+
+3. **Multi-tenancy** - O evo-nexus e single-user. No evo-crm, cada client_id teria seus tokens OAuth, multiplicando a complexidade de refresh.
+
+4. **Client ID publico** - Tanto o evo-nexus quanto o evo-crm usariam `app_EMoamEEZ73f0CkXaXp7hrann`. OpenAI pode revogar ou restringir a qualquer momento.
+
+---
+
+## 7. Recomendacao Final
+
+### Cenario A: Se voce quer o MESMO comportamento do evo-nexus
+
+**POSSIVEL, complexidade MEDIA (~44 arquivos, 2-3 semanas)**
+
+O fluxo OAuth do evo-nexus pode ser portado para o evo-crm. Porem, o evo-nexus
+usa os tokens apenas para alimentar o CLI `openclaude`, que gerencia tudo internamente.
+No evo-crm, os tokens seriam passados diretamente como `api_key` ao LiteLLM, o que
+**pode funcionar para alguns endpoints** mas nao e garantido pela OpenAI.
+
+**Quando faz sentido:** Se voce quer oferecer aos usuarios uma alternativa de autenticacao
+"zero config" onde eles simplesmente logam com a conta ChatGPT ao inves de copiar/colar
+uma API key. O billing seria via assinatura ChatGPT (nao pay-per-use).
+
+### Cenario B: Se voce quer autenticacao robusta para API OpenAI
+
+**NAO implementar OAuth Codex. Manter API keys.**
+
+**Razoes:**
+1. **Scopes insuficientes** - Tokens Codex podem nao ter `model.request`, causando 401 em chamadas diretas.
+2. **Client ID nao oficial** - Risco de bloqueio pela OpenAI.
+3. **Billing incompativel** - Muda de pay-per-use para assinatura ChatGPT.
+4. **API keys funcionam perfeitamente** para todos os 100+ providers via LiteLLM.
+
+### Cenario C: Implementacao Hibrida (Recomendado se quiser seguir em frente)
+
+Oferecer **ambas as opcoes** ao usuario na UI:
+- **API Key** (existente, funciona com todos os providers)
+- **OAuth Codex** (novo, apenas para OpenAI, experimental)
+
+Isso minimiza risco: se OAuth falhar, o usuario sempre pode cair de volta para API key.
+
+### Alternativas que Agregam Mais Valor
+
+1. **Key validation automatica** - Ao colar a API key, validar com uma chamada de teste e listar modelos disponiveis
+2. **Usage tracking** - Dashboard de uso por API key/provider
+3. **Key rotation** - Alertas quando uma key esta antiga ou comprometida
+4. **Monitoramento de custos** - Integrar com API de billing dos providers
+
+---
+
+## 8. Arquivos-Chave Analisados
 
 ### evo-ai (Core + Processor)
 - `src/models/models.py` - Modelos ApiKey e Agent
@@ -247,7 +477,15 @@ A arquitetura do evo-crm esta bem preparada para isso:
 - `frontend/services/agentService.ts` - Cliente API
 - `frontend/types/aiModels.ts` - Providers e modelos
 
-### Infraestrutura
+### Infraestrutura (evo-crm)
 - `docker-compose.yml` - Orquestracao de servicos
 - `.env.example` - Variaveis de ambiente (ENCRYPTION_KEY, DOORKEEPER_JWT_*)
 - `nginx/nginx.conf` - Gateway com rotas /oauth/* e /api/v1/dynamic_oauth/*
+
+### evo-nexus (Referencia OAuth)
+- `dashboard/backend/routes/providers.py` - **Implementacao completa do OAuth Codex** (PKCE + Device Code)
+- `dashboard/frontend/src/pages/Providers.tsx` - UI de configuracao de providers com OAuth
+- `config/providers.example.json` - Configuracao de providers (OpenAI, OpenRouter, Gemini, etc.)
+- `social-auth/app.py` - OAuth para redes sociais (YouTube, Instagram, etc.)
+- `social-auth/env_manager.py` - Gerenciamento multi-conta de tokens OAuth
+- `.env.example` - Variaveis de ambiente para providers de IA
